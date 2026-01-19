@@ -55,8 +55,26 @@ sudo apt-get install poppler-utils  # Only if using pdf2image backend
 ### Run the Application
 
 ```bash
-python main.py
+python main.py              # Normal mode
+python main.py --debug      # Debug mode (verbose output + saves images)
+python main.py -d           # Short form of --debug
 ```
+
+### Command Line Options
+
+| Option | Description |
+|--------|-------------|
+| `--debug`, `-d` | Enable debug mode: saves extracted images to `debug_output/` folder and prints verbose detection info |
+
+### Debug Mode
+
+When running with `--debug`, the application will:
+- Save all extracted PDF pages as PNG images
+- Save each image preprocessing variant (grayscale, threshold, etc.)
+- Save all detected QR code regions
+- Print detailed detection logs showing which methods found which codes
+
+This is useful for troubleshooting QR code detection issues.
 
 ### Steps to Use
 

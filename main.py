@@ -2,6 +2,10 @@
 """
 QR Code Updater - A cross-platform application to read QR codes from PDFs,
 modify the Purpose field, and generate updated QR codes.
+
+Usage:
+    python main.py           # Normal mode
+    python main.py --debug   # Debug mode (saves images, verbose output)
 """
 
 import tkinter as tk
@@ -11,12 +15,19 @@ import qrcode
 import tempfile
 import os
 import re
+import argparse
 from pathlib import Path
 from datetime import datetime
 
-# Debug mode - saves extracted images to disk
-DEBUG_SAVE_IMAGES = True
+# Debug mode - controlled by --debug argument
+DEBUG_MODE = False
 DEBUG_OUTPUT_DIR = Path(__file__).parent / "debug_output"
+
+
+def debug_print(*args, **kwargs):
+    """Print only if debug mode is enabled."""
+    if DEBUG_MODE:
+        print(*args, **kwargs)
 
 # PDF and QR detection imports
 try:
@@ -47,7 +58,7 @@ except ImportError:
 
 def save_debug_image(image, name, subfolder=""):
     """Save image to debug folder if debug mode is enabled."""
-    if not DEBUG_SAVE_IMAGES:
+    if not DEBUG_MODE:
         return
 
     try:
@@ -70,9 +81,9 @@ def save_debug_image(image, name, subfolder=""):
             import cv2
             cv2.imwrite(str(filepath), image)
 
-        print(f"[DEBUG] Saved: {filepath}")
+        debug_print(f"[DEBUG] Saved: {filepath}")
     except Exception as e:
-        print(f"[DEBUG] Failed to save image: {e}")
+        debug_print(f"[DEBUG] Failed to save image: {e}")
 
 
 class QRCodeUpdater:
@@ -400,11 +411,11 @@ class QRCodeUpdater:
                 return
 
             # Search for QR codes in each image
-            print(f"[DEBUG] Found {len(images)} images in PDF")
+            debug_print(f"[DEBUG] Found {len(images)} images in PDF")
             for i, img in enumerate(images):
-                print(f"[DEBUG] Processing image {i+1} of {len(images)}")
+                debug_print(f"[DEBUG] Processing image {i+1} of {len(images)}")
                 qr_data, qr_image = self.find_utf8_qr_code(img)
-                print(f"[DEBUG] QR data: {qr_data}")
+                debug_print(f"[DEBUG] QR data: {qr_data}")
                 if qr_data:
                     self.decoded_text = qr_data
                     self.original_qr_image = qr_image
@@ -431,7 +442,7 @@ class QRCodeUpdater:
             if DEBUG_OUTPUT_DIR.exists():
                 shutil.rmtree(DEBUG_OUTPUT_DIR)
             DEBUG_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-            print(f"[DEBUG] Debug images will be saved to: {DEBUG_OUTPUT_DIR}")
+            debug_print(f"[DEBUG] Debug images will be saved to: {DEBUG_OUTPUT_DIR}")
 
         if PDF_BACKEND == "pymupdf" and fitz:
             doc = fitz.open(pdf_path)
@@ -475,17 +486,17 @@ class QRCodeUpdater:
         qr_detector = cv2.QRCodeDetector()
 
         # Method 1: Try OpenCV's QRCodeDetector on all image variants
-        print("[DEBUG] Trying OpenCV QRCodeDetector on multiple image variants...")
+        debug_print("[DEBUG] Trying OpenCV QRCodeDetector on multiple image variants...")
         for variant_name, variant_img in image_variants.items():
             save_debug_image(variant_img, f"variant_{variant_name}")
 
             retval, decoded_info, points, straight_qrcode = qr_detector.detectAndDecodeMulti(variant_img)
 
             if retval and decoded_info:
-                print(f"[DEBUG] OpenCV ({variant_name}): found {len(decoded_info)} QR codes")
+                debug_print(f"[DEBUG] OpenCV ({variant_name}): found {len(decoded_info)} QR codes")
                 for i, data in enumerate(decoded_info):
                     if data:  # Non-empty string
-                        print(f"[DEBUG] OpenCV ({variant_name}) QR #{i+1}: length={len(data)}, starts='{data[:30]}...'")
+                        debug_print(f"[DEBUG] OpenCV ({variant_name}) QR #{i+1}: length={len(data)}, starts='{data[:30]}...'")
 
                         # Extract region if points available
                         qr_image = image
@@ -506,7 +517,7 @@ class QRCodeUpdater:
                         save_debug_image(qr_image, f"opencv_{variant_name}_qr_{i+1}_{qr_type}")
 
                         if 'ST00012' in data[:20]:
-                            print(f"[DEBUG] OpenCV ({variant_name}) QR #{i+1}: ✓ Found ST00012!")
+                            debug_print(f"[DEBUG] OpenCV ({variant_name}) QR #{i+1}: ✓ Found ST00012!")
                             utf8_candidates.append((data, qr_image))
 
         if utf8_candidates:
@@ -514,7 +525,7 @@ class QRCodeUpdater:
 
         # Method 2: pyzbar on multiple image variants
         if pyzbar_decode is not None:
-            print("[DEBUG] Trying pyzbar on multiple image variants...")
+            debug_print("[DEBUG] Trying pyzbar on multiple image variants...")
 
             all_detected_regions = []  # Track regions to re-scan
 
@@ -526,10 +537,10 @@ class QRCodeUpdater:
                     variant_bgr = variant_img
 
                 decoded_objects = pyzbar_decode(variant_bgr)
-                print(f"[DEBUG] pyzbar ({variant_name}): found {len(decoded_objects)} codes")
+                debug_print(f"[DEBUG] pyzbar ({variant_name}): found {len(decoded_objects)} codes")
 
                 for i, obj in enumerate(decoded_objects):
-                    print(f"[DEBUG] pyzbar ({variant_name}) #{i+1}: type = {obj.type}")
+                    debug_print(f"[DEBUG] pyzbar ({variant_name}) #{i+1}: type = {obj.type}")
 
                     qr_region = self._extract_qr_region(image, obj)
                     save_debug_image(qr_region, f"pyzbar_{variant_name}_{i+1}_{obj.type}")
@@ -537,14 +548,14 @@ class QRCodeUpdater:
                     # For QRCODE type, try to decode
                     if obj.type == 'QRCODE':
                         raw_data = obj.data
-                        print(f"[DEBUG] pyzbar ({variant_name}) #{i+1}: bytes={len(raw_data)}, first 20={raw_data[:20]}")
+                        debug_print(f"[DEBUG] pyzbar ({variant_name}) #{i+1}: bytes={len(raw_data)}, first 20={raw_data[:20]}")
 
                         try:
                             qr_data = raw_data.decode('utf-8')
-                            print(f"[DEBUG] pyzbar ({variant_name}) #{i+1}: starts='{qr_data[:30]}...'")
+                            debug_print(f"[DEBUG] pyzbar ({variant_name}) #{i+1}: starts='{qr_data[:30]}...'")
 
                             if 'ST00012' in qr_data[:20]:
-                                print(f"[DEBUG] pyzbar ({variant_name}) #{i+1}: ✓ Found ST00012!")
+                                debug_print(f"[DEBUG] pyzbar ({variant_name}) #{i+1}: ✓ Found ST00012!")
                                 utf8_candidates.append((qr_data, qr_region))
                         except UnicodeDecodeError:
                             pass
@@ -557,7 +568,7 @@ class QRCodeUpdater:
                 return utf8_candidates[0]
 
             # Method 3: Re-scan CODE128 regions as they might be misidentified QR codes
-            print("[DEBUG] Re-scanning misidentified regions with OpenCV...")
+            debug_print("[DEBUG] Re-scanning misidentified regions with OpenCV...")
             for obj, region_pil, variant_name in all_detected_regions:
                 # Convert region to OpenCV and try QR detection
                 region_cv = cv2.cvtColor(np.array(region_pil), cv2.COLOR_RGB2GRAY)
@@ -566,11 +577,11 @@ class QRCodeUpdater:
                 for thresh_name, thresh_img in self._create_image_variants(region_cv).items():
                     retval, data, points, _ = qr_detector.detectAndDecode(thresh_img)
                     if retval and data:
-                        print(f"[DEBUG] Re-scan ({variant_name}/{thresh_name}): decoded='{data[:30]}...'")
+                        debug_print(f"[DEBUG] Re-scan ({variant_name}/{thresh_name}): decoded='{data[:30]}...'")
                         save_debug_image(region_pil, f"rescan_{variant_name}_{thresh_name}_SUCCESS")
 
                         if 'ST00012' in data[:20]:
-                            print(f"[DEBUG] Re-scan: ✓ Found ST00012!")
+                            debug_print(f"[DEBUG] Re-scan: ✓ Found ST00012!")
                             utf8_candidates.append((data, region_pil))
                             break
 
@@ -580,7 +591,7 @@ class QRCodeUpdater:
             if utf8_candidates:
                 return utf8_candidates[0]
 
-        print("[DEBUG] No ST00012 UTF-8 payment QR code found")
+        debug_print("[DEBUG] No ST00012 UTF-8 payment QR code found")
         return None, None
 
     def _create_image_variants(self, gray_image):
@@ -648,10 +659,10 @@ class QRCodeUpdater:
         # Pre-fill the entry with current purpose
         self.purpose_entry.delete(0, tk.END)
         if purpose:
-            print(f"[DEBUG] Current purpose: {purpose}")
+            debug_print(f"[DEBUG] Current purpose: {purpose}")
             add_text = Path("append.txt").read_text()
             self.purpose_entry.insert(0, purpose + add_text)
-            print(f"[DEBUG] Updated purpose: {purpose + add_text}")
+            debug_print(f"[DEBUG] Updated purpose: {purpose + add_text}")
 
     def extract_purpose(self, text):
         """Extract Purpose field from QR text."""
@@ -752,8 +763,39 @@ def check_dependencies():
     return issues
 
 
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="QR Code Updater - Extract QR codes from PDFs, modify Purpose field, generate updated codes",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+    python main.py           # Normal mode
+    python main.py --debug   # Debug mode (saves images to debug_output/, verbose output)
+        """
+    )
+    parser.add_argument(
+        '--debug', '-d',
+        action='store_true',
+        help='Enable debug mode: save extracted images and print verbose output'
+    )
+    return parser.parse_args()
+
+
 def main():
     """Main entry point."""
+    global DEBUG_MODE
+
+    # Parse command line arguments
+    args = parse_arguments()
+    DEBUG_MODE = args.debug
+
+    if DEBUG_MODE:
+        print("=" * 50)
+        print("DEBUG MODE ENABLED")
+        print(f"Debug images will be saved to: {DEBUG_OUTPUT_DIR}")
+        print("=" * 50)
+
     root = tk.Tk()
 
     # Check dependencies
