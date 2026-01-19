@@ -1,0 +1,19 @@
+# QR Code Updater - Dependencies
+# Cross-platform PDF and QR code processing
+
+# PDF handling (using pymupdf with pre-built wheels)
+pymupdf>=1.24.0
+
+# QR code detection and decoding
+pyzbar>=0.1.9
+opencv-python>=4.8.0
+Pillow>=10.0.0
+
+# QR code generation
+qrcode[pil]>=7.4
+
+# Note: On macOS, you may need to install zbar:
+#   brew install zbar
+# On Windows, pyzbar should work out of the box
+# On Linux:
+#   sudo apt-get install libzbar0
