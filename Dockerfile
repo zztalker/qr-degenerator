@@ -5,6 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 \
         libglib2.0-0 \
         nginx \
+        gettext-base \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /etc/nginx/sites-enabled/default
 
@@ -15,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY qr_processor.py app.py append.txt ./
 COPY templates ./templates
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx.conf nginx-ssl.conf /app/
 COPY start.sh /start.sh
 RUN chmod +x /start.sh
 
