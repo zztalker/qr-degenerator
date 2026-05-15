@@ -1,0 +1,10 @@
+.git
+.gitignore
+.DS_Store
+venv/
+debug_output/
+example_data/
+__pycache__/
+*.pyc
+README.md
+main.py

@@ -12,6 +12,10 @@ Pillow>=10.0.0
 # QR code generation
 qrcode[pil]>=7.4
 
+# Web app
+Flask>=3.0
+gunicorn>=21.0
+
 # Note: On macOS, you may need to install zbar:
 #   brew install zbar
 # On Windows, pyzbar should work out of the box

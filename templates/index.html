@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Code Updater</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #1a1a2e;
+            color: #eaeaea;
+            margin: 0;
+            padding: 16px;
+            min-height: 100vh;
+        }
+        .container { max-width: 640px; margin: 0 auto; }
+        h1 { color: #e94560; margin: 8px 0 20px; font-size: 22px; }
+        .card {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 14px;
+        }
+        .card h2 {
+            margin: 0 0 12px;
+            color: #e94560;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        input[type="file"], input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            background: #0f3460;
+            color: #eaeaea;
+            border: 1px solid #2a2a4a;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #e94560;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 12px;
+        }
+        button:hover:not(:disabled) { background: #ff6b6b; }
+        button:disabled { background: #555; cursor: not-allowed; }
+        .qr-display {
+            background: white;
+            padding: 16px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .qr-display img { max-width: 100%; height: auto; display: block; margin: 0 auto; }
+        .status { font-size: 13px; margin-top: 10px; min-height: 18px; color: #4ecca3; }
+        .status.error { color: #e94560; }
+        .hidden { display: none; }
+        label { font-size: 12px; color: #a0a0a0; display: block; margin: 8px 0 4px; }
+        pre {
+            background: #0f3460;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-all;
+            color: #a0a0a0;
+            max-height: 140px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>◈ QR Code Updater</h1>
+
+        <div class="card">
+            <h2>1. Upload PDF</h2>
+            <form id="upload-form">
+                <input type="file" id="pdf-file" name="pdf" accept="application/pdf" required>
+                <button type="submit" id="upload-btn">Extract QR</button>
+            </form>
+            <div id="upload-status" class="status"></div>
+        </div>
+
+        <div id="purpose-card" class="card hidden">
+            <h2>2. Edit Purpose</h2>
+            <label>Current:</label>
+            <pre id="current-purpose"></pre>
+            <label>New:</label>
+            <input type="text" id="new-purpose">
+            <button id="generate-btn">Generate QR Code</button>
+        </div>
+
+        <div id="qr-card" class="card hidden">
+            <h2>3. Scan This QR</h2>
+            <div class="qr-display">
+                <img id="qr-image" alt="Updated QR Code">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let decodedText = null;
+        const form = document.getElementById('upload-form');
+        const uploadBtn = document.getElementById('upload-btn');
+        const uploadStatus = document.getElementById('upload-status');
+        const purposeCard = document.getElementById('purpose-card');
+        const qrCard = document.getElementById('qr-card');
+        const newPurposeInput = document.getElementById('new-purpose');
+        const generateBtn = document.getElementById('generate-btn');
+
+        function setStatus(msg, isError) {
+            uploadStatus.textContent = msg;
+            uploadStatus.classList.toggle('error', !!isError);
+        }
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('pdf-file');
+            if (!fileInput.files.length) return;
+
+            setStatus('Processing PDF…', false);
+            purposeCard.classList.add('hidden');
+            qrCard.classList.add('hidden');
+            uploadBtn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('pdf', fileInput.files[0]);
+
+            try {
+                const response = await fetch('/process', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (!response.ok) {
+                    setStatus(data.error || 'Error processing PDF', true);
+                    return;
+                }
+                decodedText = data.decoded;
+                document.getElementById('current-purpose').textContent = data.current_purpose || '(none)';
+                newPurposeInput.value = data.suggested_purpose;
+                purposeCard.classList.remove('hidden');
+                setStatus('✓ QR code extracted', false);
+            } catch (err) {
+                setStatus('Network error: ' + err.message, true);
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
+
+        generateBtn.addEventListener('click', async () => {
+            if (!decodedText) return;
+            const purpose = newPurposeInput.value.trim();
+            if (!purpose) {
+                alert('Please enter a Purpose value');
+                return;
+            }
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating…';
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ decoded: decodedText, purpose }),
+                });
+                const data = await response.json();
+                if (!response.ok) {
+                    alert(data.error || 'Error generating QR');
+                    return;
+                }
+                document.getElementById('qr-image').src = data.qr_png;
+                qrCard.classList.remove('hidden');
+                qrCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            } catch (err) {
+                alert('Network error: ' + err.message);
+            } finally {
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate QR Code';
+            }
+        });
+    </script>
+</body>
+</html>
