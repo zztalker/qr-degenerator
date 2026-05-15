@@ -12,8 +12,6 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 from PIL import Image, ImageTk
 import qrcode
-import tempfile
-import os
 import re
 import argparse
 from pathlib import Path
@@ -76,9 +74,8 @@ def save_debug_image(image, name, subfolder=""):
         # Save image
         if hasattr(image, 'save'):
             image.save(filepath)
-        else:
+        elif cv2 is not None:
             # OpenCV image (numpy array)
-            import cv2
             cv2.imwrite(str(filepath), image)
 
         debug_print(f"[DEBUG] Saved: {filepath}")
@@ -437,7 +434,7 @@ class QRCodeUpdater:
         images = []
 
         # Clear debug folder for new extraction
-        if DEBUG_SAVE_IMAGES:
+        if DEBUG_MODE:
             import shutil
             if DEBUG_OUTPUT_DIR.exists():
                 shutil.rmtree(DEBUG_OUTPUT_DIR)
